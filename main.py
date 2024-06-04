@@ -304,6 +304,10 @@ print(r.content.decode('utf-8'))
 """
 # %% [markdown]
 """
+The widget is included in the file `widget.ipynb`.
+"""
+# %% [markdown]
+"""
 <!--*!{sections/q03-c.html}-->
 """
 # %% [markdown]

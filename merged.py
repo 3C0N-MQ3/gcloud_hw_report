@@ -361,6 +361,10 @@ print(r.content.decode('utf-8'))
 #         Make a user-friendly input page that takes the inputs to your ML model via widgets and displays the output. Upload a seperate .ipynb that makes this easy to use. (Next Assignment you will have tot urn this into a shareable webpage).
 #     </div>
 # %% [markdown]
+"""
+The widget is included in the file `widget.ipynb`.
+"""
+# %% [markdown]
 # <div style="border: 1px solid black; border-radius: 5px; overflow: hidden;">
 #     <div style="background-color: black; color: white; padding: 5px; text-align: left;">
 #        c.) 
