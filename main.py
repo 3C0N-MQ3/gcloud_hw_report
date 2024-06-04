@@ -10,12 +10,13 @@
 import requests
 import os 
 import joblib
-import warnings
+import subprocess
 import pandas as pd
 import numpy as np
+import json
 
 from google.cloud import storage
-from io import StringIO
+from io import StringIO, BytesIO
 from toolz import pipe
 
 
@@ -112,6 +113,10 @@ The RuneScape is a free-to-play massively multiplayer online role-playing game. 
 """
 <!--*!{sections/q03-a.html}-->
 """
+# %% [markdown]
+"""
+### Fitting the Model
+"""
 # %%
 pd.options.display.float_format = '{:,.0f}'.format
 # %%
@@ -164,6 +169,135 @@ clf = MLPClassifier(
     random_state=42
 )
 clf.fit(X_train,y_train)
+# %% [markdown]
+"""
+### Querying the model from the cloud storage bucket.
+"""
+# %%
+def load_scikit_model(file_name):
+    bucket_name = "stroke_prediction123"
+    source_blob = "stroke/" + file_name
+    
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "Gcredentials.json"
+    client = storage.Client()
+    
+    bucket = client.get_bucket(bucket_name)
+    blob = bucket.blob(source_blob)
+    
+    model_data = blob.download_as_string()
+    
+    model = joblib.load(BytesIO(model_data))
+    return(model)
+# %%
+model = load_scikit_model("stroke_NN.sav")
+# %%
+preproc = load_scikit_model("stroke_scaler.sav")
+# %% [markdown]
+"""
+### Deployed Cloud Function source code
+"""
+# %% [markdown]
+"""
+
+The entry point is the `stroke_presence` function, which receives a JSON object with the following keys: `age`, `gender`, `heart_disease`, `avg_glucose_level`, `bmi`, and `smoking_status`. The function loads the model and the preprocessor from the cloud storage bucket, preprocesses the input data, and returns the prediction and the probability of a stroke.
+
+```python
+import warnings
+import google
+import joblib
+import pandas as pd
+import requests
+import sklearn
+from urllib.parse import parse_qs
+from google.cloud import storage
+import os
+from io import StringIO
+from joblib import load
+from io import BytesIO
+from flask import jsonify
+
+def stroke_presence(request):
+    print("Models")
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            model = load_scikit_model("stroke_NN.sav")
+            preproc = load_scikit_model("stroke_scaler.sav")
+            print("Models Loaded!")
+            
+            
+            print(request)
+            dictionary = request.get_json()
+            print(dictionary)
+            
+           
+            required_keys = ['age', 'gender', 'heart_disease', 'avg_glucose_level', 'bmi', 'smoking_status']
+            missing_keys = [key for key in required_keys if key not in dictionary]
+            if missing_keys:
+                raise ValueError(f"Missing required parameter(s): {', '.join(missing_keys)}")
+            
+            age = float(dictionary['age'])
+            gender = int(dictionary['gender']) 
+            heart_disease = int(dictionary['heart_disease'])
+            avg_glucose_level = float(dictionary['avg_glucose_level'])
+            bmi = float(dictionary['bmi'])
+            smoking_status = int(dictionary['smoking_status'])  
+
+            print("Variables Set")
+            
+            
+            X = preproc.transform([[age, gender, heart_disease, avg_glucose_level, bmi, smoking_status]])
+            predictions = model.predict(X)[0]
+            probability = str(round(model.predict_proba(X)[0][1] * 100, 2)) + "%"
+            print("Probabilities Calculated")
+            print(predictions)
+            print(probability)
+            
+            return jsonify({
+                "prediction": int(predictions),
+                "status": 200,
+                "prob_of_stroke": probability
+            })
+    except Exception as e:
+        print(e)
+        return jsonify({"status": "error", "message": str(e)})
+
+def load_scikit_model(file_name):
+    bucket_name = "stroke_prediction123"
+    source_blob = "stroke/" + file_name
+    
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "Gcredentials.json"
+    client = storage.Client()
+    print("Client Created")
+    bucket = client.get_bucket(bucket_name)
+    blob = bucket.blob(source_blob)
+    
+    model_data = blob.download_as_bytes()
+    model = joblib.load(BytesIO(model_data))
+    return model
+
+```
+
+"""
+# %% [markdown]
+"""
+### Testing the API for the model
+"""
+# %%
+url = "https://us-central1-spring-cloud-econ-446.cloudfunctions.net/stroke_function"
+# %%
+r  = requests.post(url,
+    json={ 
+        "age":90,
+        "gender":1,
+        "heart_disease":1,
+        "avg_glucose_level":90,
+        "bmi":10, 
+        "smoking_status":4                           
+    }
+)
+# %%
+print(r.content.decode('utf-8'))
 # %% [markdown]
 """
 <!--*!{sections/q03-b.html}-->
